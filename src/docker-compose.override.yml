@@ -1,4 +1,4 @@
-version: '3.4'
+version: '3.8'
 
 # The default docker-compose.override file can use the "localhost" as the external name for testing web apps within the same dev machine.
 # The ESHOP_EXTERNAL_DNS_NAME_OR_IP environment variable is taken, by default, from the ".env" file defined like:
@@ -8,37 +8,61 @@ version: '3.4'
 
 services:
   seq:
+    image: datalust/seq:latest
+    restart: always
+    tty: true
     environment:
-      - ACCEPT_EULA=Y
+      - ACCEPT_EULA=${ACCEPT_EULA}
     ports:
       - "5340:80"
+    env_file:
+      - .env  
 
   sqldata:
+    image: mcr.microsoft.com/mssql/server:2019-latest 
+    tty: true
     environment:
-      - SA_PASSWORD=Pass@word
-      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${SA_PASSWORD}
+      - ACCEPT_EULA=${ACCEPT_EULA}
     ports:
       - "5433:1433"
     volumes:
-      - eshop-sqldata:/var/opt/mssql
+      - ./eshop-sqldata:/var/opt/mssql
+    env_files:
+      - .env  
 
   nosqldata:
-    ports:
+    image: mongo:4.2.3
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    ports: 
       - "27017:27017"
     volumes:
-      - eshop-nosqldata:/data/db
-
+      - ./eshop-nosqldata:/data/db
+    env_files:
+      - .env    
+      
   basketdata:
+    image: redis:latest
     ports:
       - "6379:6379"
     volumes:
-      - eshop-basketdata:/data
+      - ./eshop-basketdata:/data
+    env_files:
+      - .env  
   rabbitmq:
+    image: rabbitmq:3-management-alpine
     ports:
       - "15672:15672"
       - "5672:5672"
+    volumes:
+      - ./eshop-basketdata:/data
+    env_files:
+      - .env 
 
   identity-api:
+    image: ${REGISTRY:-eshop}/identity.api:${PLATFORM:-linux}-${TAG:-latest} # Make sure to replace with identity.api image you built with docker-compose up
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -57,8 +81,11 @@ services:
       - OrchestratorType=${ORCHESTRATOR_TYPE}
     ports:
       - "5105:80"
+    env_file:
+      - .env  
 
   basket-api:
+    image: ${REGISTRY:-eshop}/basket.api:${PLATFORM:-linux}-${TAG:-latest}
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -80,6 +107,7 @@ services:
       - "9103:81"
 
   catalog-api:
+    image: ${REGISTRY:-eshop}/catalog.api:${PLATFORM:-linux}-${TAG:-latest}
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionString=${ESHOP_AZURE_CATALOG_DB:-Server=sqldata;Database=Microsoft.eShopOnContainers.Services.CatalogDb;User Id=sa;Password=Pass@word}
@@ -102,6 +130,7 @@ services:
       - "9101:81"
 
   ordering-api:
+    image: ${REGISTRY:-eshop}/ordering.api:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -127,6 +156,7 @@ services:
       - "9102:81"
 
   ordering-backgroundtasks:
+    image: ${REGISTRY:-eshop}/ordering.backgroundtasks:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -146,6 +176,7 @@ services:
       - "5111:80"
 
   payment-api:
+    image: ${REGISTRY:-eshop}/payment.api:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -161,6 +192,7 @@ services:
       - "5108:80"
 
   webhooks-api:
+    image: ${REGISTRY:-eshop}/webhooks.api:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -174,6 +206,7 @@ services:
       - "5113:80"
 
   mobileshoppingapigw:
+    image: envoyproxy/envoy:v1.11.1 
     volumes:
       - ./ApiGateways/Envoy/config/mobileshopping:/etc/envoy
     ports:
@@ -181,6 +214,7 @@ services:
     - "15200:8001"
 
   webshoppingapigw:
+    image: envoyproxy/envoy:v1.11.1 
     volumes:
       - ./ApiGateways/Envoy/config/webshopping:/etc/envoy
     ports:
@@ -188,6 +222,7 @@ services:
     - "15202:8001"
 
   mobileshoppingagg:
+    image: ${RGISETRY:-eshop}/mobileshoppingagg:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - urls__basket=http://basket-api
@@ -207,6 +242,7 @@ services:
       - "5120:80"
 
   webshoppingagg:
+    image: ${REGISTRY:-eshop}/webshoppingagg:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - urls__basket=http://basket-api
@@ -226,6 +262,7 @@ services:
       - "5121:80"
 
   ordering-signalrhub:
+    image: ${REGISTRY:-eshop}/ordering.signalrhub:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -240,6 +277,7 @@ services:
       - "5112:80"
 
   webstatus:
+    image: ${REGISTRY:-eshop}/webstatus:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -271,6 +309,7 @@ services:
       - "5107:80"
 
   webspa:
+    image: ${REGISTRY:-eshop}/webspa:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -285,6 +324,7 @@ services:
       - "5104:80"
 
   webmvc:
+    image: ${REGISTRY:-eshop}/webmvc:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:80
@@ -300,6 +340,7 @@ services:
       - "5100:80"
 
   webhooks-client:
+    image: ${REGISTRY:-eshop}/webhooks.client:${PLATFORM:-linux}-${TAG:-latest} 
     environment:
       - ASPNETCORE_URLS=http://0.0.0.0:80
       - Token=6168DB8D-DC58-4094-AF24-483278923590      # Webhooks are registered with this token (any value is valid) but the client won't check it
